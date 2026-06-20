@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import Image from "next/image";
 import SignaturePad from "./components/SignaturePad";
 
@@ -12,42 +12,78 @@ export default function RegistrationPage() {
     phoneNumber: "",
     email: "",
     maritalStatus: "",
-    spouseName: "",
-    spousePhone: "",
-    spouseEmail: "",
-    children: [""],
   });
+
+  // Family members: each has { name, relation, phone, email }
+  const [familyMembers, setFamilyMembers] = useState([
+    { name: "", relation: "", phone: "", email: "" },
+  ]);
 
   const [submitted, setSubmitted] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
   const [loading, setLoading] = useState(false);
   const [submitError, setSubmitError] = useState("");
+  const [paymentFile, setPaymentFile] = useState(null);
+  const [paymentPreview, setPaymentPreview] = useState("");
+  const [dragOver, setDragOver] = useState(false);
+  const fileInputRef = useRef(null);
 
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   }, []);
 
-  const handleChildChange = useCallback((index, value) => {
-    setFormData((prev) => {
-      const newChildren = [...prev.children];
-      newChildren[index] = value;
-      return { ...prev, children: newChildren };
+  const handleFamilyMemberChange = useCallback((index, field, value) => {
+    setFamilyMembers((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
     });
   }, []);
 
-  const addChild = useCallback(() => {
-    setFormData((prev) => ({
+  const addFamilyMember = useCallback(() => {
+    setFamilyMembers((prev) => [
       ...prev,
-      children: [...prev.children, ""],
-    }));
+      { name: "", relation: "", phone: "", email: "" },
+    ]);
   }, []);
 
-  const removeChild = useCallback((index) => {
-    setFormData((prev) => ({
-      ...prev,
-      children: prev.children.filter((_, i) => i !== index),
-    }));
+  const removeFamilyMember = useCallback((index) => {
+    setFamilyMembers((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleFileSelect = useCallback((file) => {
+    if (!file) return;
+    // Validate type
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif", "application/pdf"];
+    if (!allowed.includes(file.type)) {
+      setSubmitError("Payment screenshot must be an image (JPG, PNG, WEBP) or PDF.");
+      return;
+    }
+    // Validate size (max 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setSubmitError("File size must be under 5MB.");
+      return;
+    }
+    setSubmitError("");
+    setPaymentFile(file);
+    if (file.type !== "application/pdf") {
+      setPaymentPreview(URL.createObjectURL(file));
+    } else {
+      setPaymentPreview("pdf");
+    }
+  }, []);
+
+  const handleDrop = useCallback((e) => {
+    e.preventDefault();
+    setDragOver(false);
+    handleFileSelect(e.dataTransfer.files[0]);
+  }, [handleFileSelect]);
+
+  const handleRemoveFile = useCallback(() => {
+    setPaymentFile(null);
+    setPaymentPreview("");
+    if (fileInputRef.current) fileInputRef.current.value = "";
   }, []);
 
   const handleSubmit = useCallback(
@@ -56,10 +92,18 @@ export default function RegistrationPage() {
       setLoading(true);
       setSubmitError("");
       try {
+        // Use FormData so we can attach the file
+        const fd = new FormData();
+        Object.entries(formData).forEach(([key, val]) => {
+          fd.append(key, val);
+        });
+        fd.append("familyMembers", JSON.stringify(familyMembers));
+        if (paymentFile) {
+          fd.append("paymentScreenshot", paymentFile, paymentFile.name);
+        }
         const res = await fetch("/api/send-email", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(formData),
+          body: fd, // browser sets multipart Content-Type automatically
         });
         const json = await res.json();
         if (!res.ok || !json.success) {
@@ -72,7 +116,7 @@ export default function RegistrationPage() {
         setLoading(false);
       }
     },
-    [formData]
+    [formData, familyMembers, paymentFile]
   );
 
   const isFamily = formData.membershipType === "family";
@@ -297,7 +341,7 @@ export default function RegistrationPage() {
               </div>
 
               {/* Signature */}
-              <div className="grid grid-cols-2 gap-5 max-md:grid-cols-1">
+              <div className="grid grid-cols-1 gap-5 max-md:grid-cols-1">
                 <div className="flex flex-col gap-1.5">
                   <label className="text-xs font-semibold text-text-secondary tracking-wider uppercase">
                     Signature
@@ -307,98 +351,205 @@ export default function RegistrationPage() {
               </div>
             </div>
 
-            {/* ===== Spouse & Children (Family only) ===== */}
+            {/* ===== Family Members (Family only) ===== */}
             {isFamily && (
               <>
-                {/* Spouse Header */}
                 <SectionHeader
-                  icon="💑"
-                  title="Spouse Information"
+                  icon="👨‍👩‍👧‍👦"
+                  title="Family Members"
                   className="pt-6 pb-2 px-0"
                 />
 
-                <div className="mt-4 p-5 bg-cream/60 border border-dashed border-gold/30 rounded-2xl">
-                  <div className="grid gap-5">
-                    <InputField
-                      id="spouseName"
-                      name="spouseName"
-                      label="Spouse Name"
-                      icon="👤"
-                      placeholder="Spouse's full name"
-                      value={formData.spouseName}
-                      onChange={handleChange}
-                    />
-                    <div className="grid grid-cols-2 gap-5 max-md:grid-cols-1">
-                      <InputField
-                        id="spousePhone"
-                        name="spousePhone"
-                        type="tel"
-                        label="Phone Number"
-                        icon="📞"
-                        placeholder="(403) 000-0000"
-                        value={formData.spousePhone}
-                        onChange={handleChange}
-                      />
-                      <InputField
-                        id="spouseEmail"
-                        name="spouseEmail"
-                        type="email"
-                        label="Email"
-                        icon="✉️"
-                        placeholder="spouse@example.com"
-                        value={formData.spouseEmail}
-                        onChange={handleChange}
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Children Header */}
-                <SectionHeader
-                  icon="👧"
-                  title="Children"
-                  className="pt-6 pb-2 px-0"
-                />
-
-                <div className="mt-4 p-5 bg-cream/60 border border-dashed border-gold/30 rounded-2xl">
-                  <div className="grid gap-4">
-                    {formData.children.map((child, index) => (
-                      <div
-                        key={index}
-                        className="grid grid-cols-[1fr_auto] gap-2 items-end"
-                      >
-                        <InputField
-                          id={`child-${index}`}
-                          label={`Child ${index + 1}`}
-                          icon="👶"
-                          placeholder={`Child ${index + 1} name`}
-                          value={child}
-                          onChange={(e) =>
-                            handleChildChange(index, e.target.value)
-                          }
-                        />
-                        {formData.children.length > 1 && (
+                <div className="grid gap-4 mt-4">
+                  {familyMembers.map((member, index) => (
+                    <div
+                      key={index}
+                      className="p-5 bg-cream/60 border border-dashed border-gold/30 rounded-2xl relative"
+                    >
+                      {/* Member number badge */}
+                      <div className="flex items-center justify-between mb-4">
+                        <span className="text-xs font-bold text-saffron-dark uppercase tracking-wider">
+                          Member {index + 1}
+                        </span>
+                        {familyMembers.length > 1 && (
                           <button
                             type="button"
-                            onClick={() => removeChild(index)}
-                            aria-label={`Remove child ${index + 1}`}
-                            className="flex items-center justify-center w-9 h-9 bg-transparent border-[1.5px] border-border-custom rounded-[10px] cursor-pointer text-lg text-text-muted transition-all duration-250 hover:border-crimson hover:text-crimson hover:bg-crimson/5"
+                            onClick={() => removeFamilyMember(index)}
+                            aria-label={`Remove member ${index + 1}`}
+                            className="flex items-center gap-1 px-3 py-1 text-xs font-medium text-text-muted border border-border-custom rounded-full hover:border-crimson hover:text-crimson hover:bg-crimson/5 transition-all duration-200"
                           >
-                            ✕
+                            ✕ Remove
                           </button>
                         )}
                       </div>
-                    ))}
-                    <button
-                      type="button"
-                      onClick={addChild}
-                      className="inline-flex items-center gap-1.5 px-4 py-2 mt-1 bg-transparent border-[1.5px] border-dashed border-border-custom rounded-[10px] text-sm font-medium text-text-muted cursor-pointer transition-all duration-250 hover:border-saffron hover:text-saffron hover:bg-saffron/[0.04] self-start"
-                    >
-                      <span>＋</span> Add another child
-                    </button>
-                  </div>
+
+                      <div className="grid gap-4">
+                        {/* Name & Relation row */}
+                        <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
+                          <InputField
+                            id={`member-name-${index}`}
+                            label="Name"
+                            icon="👤"
+                            placeholder="Full name"
+                            value={member.name}
+                            onChange={(e) => handleFamilyMemberChange(index, "name", e.target.value)}
+                          />
+                          <div className="flex flex-col gap-1.5 group/input">
+                            <label className="text-xs font-semibold text-text-secondary tracking-wider uppercase transition-colors duration-150 group-focus-within/input:text-saffron-dark">
+                              Relation
+                            </label>
+                            <div className="relative flex items-center">
+                              <span className="absolute left-3.5 text-base text-text-muted transition-colors duration-250 group-focus-within/input:text-saffron pointer-events-none z-[1]">🔗</span>
+                              <select
+                                value={member.relation}
+                                onChange={(e) => handleFamilyMemberChange(index, "relation", e.target.value)}
+                                className="w-full py-3.5 px-4 pl-11 font-[family-name:var(--font-body)] text-[0.95rem] text-text-primary bg-white/85 border-[1.5px] border-border-custom rounded-[10px] outline-none transition-all duration-250 appearance-none cursor-pointer hover:border-gold-light hover:bg-white/95 focus:border-gold focus:bg-white focus:shadow-[0_0_0_4px_rgba(212,168,67,0.12),0_2px_8px_rgba(26,26,46,0.08)]"
+                              >
+                                <option value="">Select relation…</option>
+                                <option value="Spouse">Spouse</option>
+                                <option value="Son">Son</option>
+                                <option value="Daughter">Daughter</option>
+                                <option value="Father">Father</option>
+                                <option value="Mother">Mother</option>
+                                <option value="Brother">Brother</option>
+                                <option value="Sister">Sister</option>
+                                <option value="Other">Other</option>
+                              </select>
+                              {/* Dropdown arrow */}
+                              <span className="absolute right-3.5 pointer-events-none text-text-muted text-xs">▼</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Phone & Email row (optional) */}
+                        <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1">
+                          <InputField
+                            id={`member-phone-${index}`}
+                            type="tel"
+                            label="Phone (optional)"
+                            icon="📞"
+                            placeholder="(403) 000-0000"
+                            value={member.phone}
+                            onChange={(e) => handleFamilyMemberChange(index, "phone", e.target.value)}
+                          />
+                          <InputField
+                            id={`member-email-${index}`}
+                            type="email"
+                            label="Email (optional)"
+                            icon="✉️"
+                            placeholder="member@example.com"
+                            value={member.email}
+                            onChange={(e) => handleFamilyMemberChange(index, "email", e.target.value)}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+
+                  {/* Add Member Button */}
+                  <button
+                    type="button"
+                    onClick={addFamilyMember}
+                    className="w-full flex items-center justify-center gap-2 py-3.5 border-[1.5px] border-dashed border-gold/40 rounded-2xl text-sm font-semibold text-saffron-dark hover:border-saffron hover:bg-saffron/[0.04] transition-all duration-250 group"
+                  >
+                    <span className="w-6 h-6 rounded-full bg-saffron/10 flex items-center justify-center text-saffron font-bold group-hover:bg-saffron group-hover:text-white transition-all duration-250">＋</span>
+                    Add Another Family Member
+                  </button>
                 </div>
               </>
+            )}
+          </div>
+
+          {/* ---- Payment Screenshot Upload ---- */}
+          <div className="px-8 pb-6 max-sm:px-4">
+            <SectionHeader icon="💳" title="Payment Screenshot" />
+            <p className="text-xs text-text-muted mb-4 mt-1">
+              Optional — upload a screenshot or photo of your e-transfer confirmation.
+            </p>
+
+            {!paymentPreview ? (
+              /* Drop Zone */
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                className={`relative flex flex-col items-center justify-center gap-3 p-8 border-2 border-dashed rounded-2xl cursor-pointer transition-all duration-250
+                  ${
+                    dragOver
+                      ? "border-saffron bg-saffron/[0.06] scale-[1.01]"
+                      : "border-border-custom bg-white/50 hover:border-gold hover:bg-gold/[0.04]"
+                  }`}
+              >
+                <div className="w-14 h-14 rounded-xl bg-gradient-to-br from-gold/20 to-saffron/10 flex items-center justify-center text-3xl">
+                  📤
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-text-secondary">
+                    {dragOver ? "Drop it here!" : "Drag & drop your payment screenshot"}
+                  </p>
+                  <p className="text-xs text-text-muted mt-1">
+                    or <span className="text-saffron font-semibold underline underline-offset-2">click to browse</span>
+                  </p>
+                  <p className="text-[11px] text-text-muted mt-2">JPG, PNG, WEBP or PDF · Max 5MB</p>
+                </div>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+                  className="hidden"
+                  onChange={(e) => handleFileSelect(e.target.files[0])}
+                />
+              </div>
+            ) : (
+              /* Preview */
+              <div className="relative rounded-2xl overflow-hidden border border-gold/30 bg-white/80">
+                {paymentPreview === "pdf" ? (
+                  <div className="flex items-center gap-4 p-5">
+                    <div className="w-12 h-12 rounded-xl bg-crimson/10 flex items-center justify-center text-2xl">📄</div>
+                    <div>
+                      <p className="text-sm font-semibold text-text-primary">{paymentFile?.name}</p>
+                      <p className="text-xs text-text-muted mt-0.5">{(paymentFile?.size / 1024).toFixed(1)} KB · PDF</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={paymentPreview}
+                      alt="Payment screenshot preview"
+                      className="w-full max-h-64 object-contain bg-[#f8f4ef]"
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 px-4 py-2 bg-gradient-to-t from-black/40 to-transparent">
+                      <p className="text-xs text-white/90 font-medium truncate">{paymentFile?.name}</p>
+                    </div>
+                  </div>
+                )}
+                {/* Remove button */}
+                <button
+                  type="button"
+                  onClick={handleRemoveFile}
+                  className="absolute top-2 right-2 w-8 h-8 flex items-center justify-center bg-white/90 border border-border-custom rounded-full text-sm text-text-muted hover:border-crimson hover:text-crimson hover:bg-crimson/5 transition-all duration-200"
+                  aria-label="Remove file"
+                >
+                  ✕
+                </button>
+                {/* Re-upload hint */}
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="w-full py-2 text-xs font-medium text-text-muted hover:text-saffron hover:bg-saffron/[0.04] transition-colors duration-200 border-t border-border-custom"
+                >
+                  🔄 Replace file
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif,application/pdf"
+                  className="hidden"
+                  onChange={(e) => handleFileSelect(e.target.files[0])}
+                />
+              </div>
             )}
           </div>
 

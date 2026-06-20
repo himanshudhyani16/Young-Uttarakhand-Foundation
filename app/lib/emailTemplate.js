@@ -2,7 +2,7 @@
  * Generates a themed HTML email for YUF registration submissions.
  * Colors mirror the web form: saffron (#FF6B00), crimson (#C41E3A), gold (#D4A843), dark-green (#1B4332)
  */
-export function buildEmailHtml(data) {
+export function buildEmailHtml(data, hasScreenshot = false) {
   const {
     membershipType,
     fullName,
@@ -10,10 +10,7 @@ export function buildEmailHtml(data) {
     phoneNumber,
     email,
     maritalStatus,
-    spouseName,
-    spousePhone,
-    spouseEmail,
-    children,
+    familyMembers,
   } = data;
 
   const isFamily = membershipType === "family";
@@ -25,7 +22,7 @@ export function buildEmailHtml(data) {
     timeStyle: "short",
   });
 
-  const filledChildren = (children || []).filter((c) => c && c.trim() !== "");
+  const filledMembers = (familyMembers || []).filter((m) => m && m.name && m.name.trim() !== "");
 
   /* ── helpers ── */
   const row = (label, value) =>
@@ -145,58 +142,31 @@ export function buildEmailHtml(data) {
                 ${row("Email", email ? `<a href="mailto:${email}" style="color:#FF6B00;text-decoration:none;">${email}</a>` : "")}
                 ${row("Marital Status", maritalStatus ? maritalStatus.charAt(0).toUpperCase() + maritalStatus.slice(1) : "")}
                 ${row("Membership", `${membershipLabel} – ${annualFee} / year`)}
+                ${hasScreenshot ? `
+                  <tr>
+                    <td style="padding:10px 16px;font-size:13px;color:#7A7A8E;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;border-bottom:1px solid #F0E8DC;width:36%;">Payment Proof</td>
+                    <td style="padding:10px 16px;font-size:15px;color:#1A1A2E;border-bottom:1px solid #F0E8DC;">
+                      <span style="display:inline-flex;align-items:center;gap:6px;background:linear-gradient(135deg,rgba(27,67,50,0.08),rgba(45,106,79,0.08));border:1px solid rgba(27,67,50,0.2);border-radius:6px;padding:4px 12px;font-size:13px;font-weight:600;color:#1B4332;">📎 Screenshot attached</span>
+                    </td>
+                  </tr>` : `
+                  <tr>
+                    <td style="padding:10px 16px;font-size:13px;color:#7A7A8E;font-weight:600;text-transform:uppercase;letter-spacing:0.5px;white-space:nowrap;border-bottom:1px solid #F0E8DC;width:36%;">Payment Proof</td>
+                    <td style="padding:10px 16px;font-size:14px;color:#7A7A8E;border-bottom:1px solid #F0E8DC;font-style:italic;">Not uploaded</td>
+                  </tr>`}
 
-                ${isFamily && (spouseName || spousePhone || spouseEmail) ? `
-                  ${sectionTitle("💑", "Spouse Information")}
-                  ${row("Spouse Name", spouseName)}
-                  ${row("Spouse Phone", spousePhone)}
-                  ${row("Spouse Email", spouseEmail ? `<a href="mailto:${spouseEmail}" style="color:#FF6B00;text-decoration:none;">${spouseEmail}</a>` : "")}
+                ${isFamily && filledMembers.length > 0 ? `
+                  ${sectionTitle("👨‍👩‍👧‍👦", "Family Members")}
+                  ${filledMembers.map((m, i) => `
+                    <tr>
+                      <td colspan="2" style="padding:8px 16px 0;font-size:11px;font-weight:700;color:#CC5500;text-transform:uppercase;letter-spacing:1px;border-bottom:1px solid #F0E8DC;">Member ${i + 1}</td>
+                    </tr>
+                    ${row("Name", m.name)}
+                    ${row("Relation", m.relation)}
+                    ${m.phone ? row("Phone", m.phone) : ""}
+                    ${m.email ? row("Email", `<a href="mailto:${m.email}" style="color:#FF6B00;text-decoration:none;">${m.email}</a>`) : ""}
+                  `).join("")}
                 ` : ""}
 
-                ${isFamily && filledChildren.length > 0 ? `
-                  ${sectionTitle("👧", "Children")}
-                  ${filledChildren.map((c, i) => row(`Child ${i + 1}`, c)).join("")}
-                ` : ""}
-
-              </table>
-            </td>
-          </tr>
-
-          <!-- ── ACTION PROMPT ── -->
-          <tr>
-            <td style="background:#FFFFFF;padding:0 24px 24px;">
-              <table width="100%" cellpadding="0" cellspacing="0" border="0"
-                style="background:linear-gradient(135deg,#1B4332,#2D6A4F);border-radius:12px;overflow:hidden;">
-                <tr>
-                  <td style="padding:20px 24px;">
-                    <p style="margin:0 0 6px;font-family:'Georgia',serif;font-size:15px;font-weight:700;color:#E8C76A;text-transform:uppercase;letter-spacing:1px;">
-                      💳 Payment Information
-                    </p>
-                    <p style="margin:0 0 14px;font-size:13px;color:rgba(255,255,255,0.8);line-height:1.6;">
-                      Membership fees and donations can be paid by e-transfer to:
-                    </p>
-                    <table width="100%" cellpadding="0" cellspacing="0" border="0">
-                      <tr>
-                        <td style="padding-right:8px;" width="50%">
-                          <a href="tel:403-400-5539" style="display:block;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px 14px;text-decoration:none;color:#fff;">
-                            <span style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.5px;display:block;">Phone</span>
-                            <span style="font-size:14px;font-weight:600;">📞 403-400-5539</span>
-                          </a>
-                        </td>
-                        <td width="50%">
-                          <a href="mailto:uttarakhandsociety@gmail.com" style="display:block;background:rgba(255,255,255,0.08);border:1px solid rgba(255,255,255,0.15);border-radius:8px;padding:10px 14px;text-decoration:none;color:#fff;">
-                            <span style="font-size:11px;color:rgba(255,255,255,0.5);text-transform:uppercase;letter-spacing:0.5px;display:block;">Email</span>
-                            <span style="font-size:13px;font-weight:600;">✉️ uttarakhandsociety@gmail.com</span>
-                          </a>
-                        </td>
-                      </tr>
-                    </table>
-                    <p style="margin:14px 0 0;font-size:12px;color:rgba(255,255,255,0.6);display:flex;align-items:center;gap:6px;">
-                      📍 Records Office: 6102-2255, 32 ST N.E. Calgary, AB T1Y 0C2
-                      &nbsp;&nbsp;<span style="background:rgba(212,168,67,0.25);border:1px solid rgba(212,168,67,0.35);border-radius:4px;padding:2px 8px;color:#E8C76A;font-weight:700;">#0117</span>
-                    </p>
-                  </td>
-                </tr>
               </table>
             </td>
           </tr>
@@ -231,7 +201,7 @@ export function buildEmailHtml(data) {
 /**
  * Plain-text fallback for email clients that don't render HTML.
  */
-export function buildEmailText(data) {
+export function buildEmailText(data, hasScreenshot = false) {
   const {
     membershipType,
     fullName,
@@ -239,10 +209,7 @@ export function buildEmailText(data) {
     phoneNumber,
     email,
     maritalStatus,
-    spouseName,
-    spousePhone,
-    spouseEmail,
-    children,
+    familyMembers,
   } = data;
 
   const isFamily = membershipType === "family";
@@ -259,19 +226,19 @@ export function buildEmailText(data) {
     `Email:          ${email}`,
     `Marital Status: ${maritalStatus}`,
     `Membership:     ${isFamily ? "Family" : "Individual"} – ${fee}/year`,
+    `Payment Proof: ${hasScreenshot ? "Screenshot attached (see attachment)" : "Not uploaded"}`,
   ];
 
-  if (isFamily && spouseName) {
-    lines.push("", "SPOUSE INFORMATION", "-".repeat(30));
-    lines.push(`Spouse Name:  ${spouseName}`);
-    if (spousePhone) lines.push(`Spouse Phone: ${spousePhone}`);
-    if (spouseEmail) lines.push(`Spouse Email: ${spouseEmail}`);
-  }
-
-  const filledChildren = (children || []).filter((c) => c && c.trim());
-  if (isFamily && filledChildren.length > 0) {
-    lines.push("", "CHILDREN", "-".repeat(30));
-    filledChildren.forEach((c, i) => lines.push(`Child ${i + 1}: ${c}`));
+  const filledMembers = (familyMembers || []).filter((m) => m && m.name && m.name.trim());
+  if (isFamily && filledMembers.length > 0) {
+    lines.push("", "FAMILY MEMBERS", "-".repeat(30));
+    filledMembers.forEach((m, i) => {
+      lines.push(`  Member ${i + 1}:`);
+      lines.push(`    Name:     ${m.name}`);
+      if (m.relation) lines.push(`    Relation: ${m.relation}`);
+      if (m.phone)    lines.push(`    Phone:    ${m.phone}`);
+      if (m.email)    lines.push(`    Email:    ${m.email}`);
+    });
   }
 
   lines.push(
