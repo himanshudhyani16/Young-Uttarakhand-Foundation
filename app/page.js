@@ -20,6 +20,8 @@ export default function RegistrationPage() {
 
   const [submitted, setSubmitted] = useState(false);
   const [hasSignature, setHasSignature] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   const handleChange = useCallback((e) => {
     const { name, value } = e.target;
@@ -49,10 +51,26 @@ export default function RegistrationPage() {
   }, []);
 
   const handleSubmit = useCallback(
-    (e) => {
+    async (e) => {
       e.preventDefault();
-      console.log("Form submitted:", formData);
-      setSubmitted(true);
+      setLoading(true);
+      setSubmitError("");
+      try {
+        const res = await fetch("/api/send-email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(formData),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.success) {
+          throw new Error(json.error || "Submission failed. Please try again.");
+        }
+        setSubmitted(true);
+      } catch (err) {
+        setSubmitError(err.message);
+      } finally {
+        setLoading(false);
+      }
     },
     [formData]
   );
@@ -384,17 +402,36 @@ export default function RegistrationPage() {
             )}
           </div>
 
+          {/* ---- Error Banner ---- */}
+          {submitError && (
+            <div className="mx-8 mb-4 max-sm:mx-4 px-4 py-3 bg-crimson/10 border border-crimson/30 rounded-xl flex items-center gap-3">
+              <span className="text-xl">⚠️</span>
+              <p className="text-sm font-medium text-crimson">{submitError}</p>
+            </div>
+          )}
+
           {/* ---- Submit Button ---- */}
           <div className="px-8 pb-8 max-sm:px-4 max-sm:pb-4">
             <button
               type="submit"
-              className="relative w-full py-[18px] px-8 font-[family-name:var(--font-heading)] text-base font-bold tracking-[2px] uppercase text-white bg-gradient-to-br from-saffron to-crimson bg-[length:200%_200%] border-none rounded-2xl cursor-pointer overflow-hidden transition-all duration-250 shadow-[0_4px_15px_rgba(196,30,58,0.3)] hover:-translate-y-0.5 hover:shadow-[0_8px_25px_rgba(196,30,58,0.4)] hover:bg-[position:100%_0] active:translate-y-0"
+              disabled={loading}
+              className="relative w-full py-[18px] px-8 font-[family-name:var(--font-heading)] text-base font-bold tracking-[2px] uppercase text-white bg-gradient-to-br from-saffron to-crimson bg-[length:200%_200%] border-none rounded-2xl cursor-pointer overflow-hidden transition-all duration-250 shadow-[0_4px_15px_rgba(196,30,58,0.3)] hover:-translate-y-0.5 hover:shadow-[0_8px_25px_rgba(196,30,58,0.4)] hover:bg-[position:100%_0] active:translate-y-0 disabled:opacity-70 disabled:cursor-not-allowed disabled:hover:translate-y-0"
             >
               <span className="flex items-center justify-center gap-2 relative z-[1]">
-                Submit Registration
-                <span className="text-xl transition-transform duration-250 group-hover:translate-x-1">
-                  →
-                </span>
+                {loading ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
+                    </svg>
+                    Sending...
+                  </>
+                ) : (
+                  <>
+                    Submit Registration
+                    <span className="text-xl">→</span>
+                  </>
+                )}
               </span>
             </button>
           </div>
@@ -474,9 +511,12 @@ export default function RegistrationPage() {
             <h2 className="font-[family-name:var(--font-heading)] text-2xl font-bold text-dark-green mb-2">
               Registration Submitted!
             </h2>
-            <p className="text-[0.95rem] text-text-secondary leading-relaxed mb-7">
+            <p className="text-[0.95rem] text-text-secondary leading-relaxed mb-2">
               Thank you for registering with Young Uttarakhand Foundation.
-              We&apos;ll be in touch shortly. Jai Uttarakhand! 🙏
+              A confirmation email has been sent to our records office.
+            </p>
+            <p className="text-[0.95rem] text-text-secondary leading-relaxed mb-7">
+              Jai Uttarakhand! 🙏
             </p>
             <button
               onClick={() => setSubmitted(false)}

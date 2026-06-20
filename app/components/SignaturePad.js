@@ -12,7 +12,7 @@ export default function SignaturePad({ onSignatureChange }) {
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
 
-    if (e.touches) {
+    if (e.touches) { 
       return {
         x: (e.touches[0].clientX - rect.left) * scaleX,
         y: (e.touches[0].clientY - rect.top) * scaleY,
